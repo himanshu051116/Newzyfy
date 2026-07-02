@@ -1,0 +1,2 @@
+"""Persistence and messaging infrastructure."""
+

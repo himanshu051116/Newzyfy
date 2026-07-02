@@ -1,0 +1,2 @@
+"""Acquisition application services."""
+

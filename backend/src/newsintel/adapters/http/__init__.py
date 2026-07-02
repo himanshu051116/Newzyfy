@@ -1,0 +1,2 @@
+"""Safe HTTP collection helpers."""
+
