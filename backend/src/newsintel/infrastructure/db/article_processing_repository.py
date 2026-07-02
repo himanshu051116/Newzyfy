@@ -313,6 +313,7 @@ class SqlAlchemyArticleProcessingRepository(ArticleProcessingRepository):
                         candidate_id=candidate.id,
                     )
                     session.add(event)
+                    await session.flush()
                     created_event = True
                     assignment_state = EventAssignmentState.PROVISIONAL
                     assignment_score = None

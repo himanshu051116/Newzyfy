@@ -50,6 +50,9 @@ Phase 1 development has started. The repository currently contains:
 - conditional requests, `304 Not Modified` handling, adaptive scheduling, and failure backoff;
 - persisted poll-run metrics and automatic sitemap-index expansion;
 - a separate article-processing worker that leases URL candidates from the frontier;
+- a durable article-processing state machine with explicit stages for queued,
+  leased, fetching, fetched, extracting, extracted, validated, persisting,
+  completed, rejected, retryable failure, and permanent failure;
 - real HTML article extraction using JSON-LD, OpenGraph/canonical metadata, and
   conservative visible-text heuristics;
 - immutable article versions with extraction method, warnings, content hash,
@@ -60,6 +63,11 @@ Phase 1 development has started. The repository currently contains:
 - existing-event linking, provisional new-event creation, and stored assignment
   feature scores for newly ingested articles;
 - article fetch-run audit records and retry/terminal-failure tracking;
+- structured article-worker logs for fetch, snapshot, extraction, validation,
+  persistence flush, database commit, retry scheduling, dead-lettering, and final
+  job completion;
+- a local transactional outbox relay worker that marks committed outbox events as
+  published idempotently through the consumer inbox;
 - deterministic claim extraction from exact stored article sentences;
 - claim/evidence/verification lineage tables with origin evidence links;
 - initial `not_checkable` claim verification records when independent evidence has
@@ -80,6 +88,8 @@ Phase 1 development has started. The repository currently contains:
 - per-channel poll cap for newly admitted URLs, defaulting to 200, tunable through
   `NEWSINTEL_MAX_NEW_URLS_PER_CHANNEL_POLL`;
 - read APIs for article lists, article details, and event details;
+- status and metrics endpoints for committed article count, queue depth, oldest
+  pending candidate, candidate stages, pending outbox events, and migration revision;
 - unit and API integration tests;
 - a local zero-cost service topology for PostgreSQL/PostGIS, Redis, Qdrant, and MinIO.
 
@@ -124,6 +134,8 @@ Check or stop those local processes:
 
 ```powershell
 .\scripts\run-platform.ps1 status
+.\scripts\run-platform.ps1 logs
+.\scripts\run-platform.ps1 restart
 .\scripts\run-platform.ps1 stop
 ```
 
@@ -171,7 +183,96 @@ Recent article filtering can be tuned with:
 ```env
 NEWSINTEL_RECENT_ARTICLE_WINDOW_HOURS=48
 NEWSINTEL_MAX_NEW_URLS_PER_CHANNEL_POLL=200
+NEWSINTEL_MAX_NEW_URLS_PER_PUBLISHER_FETCH=300
+NEWSINTEL_MAX_NEW_URLS_PER_FETCH_JOB=2000
+NEWSINTEL_MAX_ACTIVE_CHANNELS_PER_PUBLISHER=25
+NEWSINTEL_DISCOVERY_RECOVERY_WINDOW_DAYS=7
+NEWSINTEL_INITIAL_BACKFILL_DAYS=3
+NEWSINTEL_MAX_RETRIES=3
+NEWSINTEL_WORKER_LEASE_SECONDS=120
+NEWSINTEL_DEAD_LETTER_AFTER_ATTEMPTS=3
+NEWSINTEL_ARTICLE_FETCH_RETRY_JITTER_RATIO=0.15
 ```
+
+### Article processing success semantics
+
+The article worker treats each step separately. Downloading a page or extracting text
+is not final article-processing success. A URL candidate is only counted as completed
+after PostgreSQL has committed:
+
+1. the `articles` row;
+2. the immutable `article_versions` row;
+3. event assignment or provisional event creation;
+4. extracted claims, origin evidence links, and initial verification records when
+   claims exist;
+5. candidate state and processing-stage metadata;
+6. transactional outbox events.
+
+Look for these logs in `.run/logs/articles.out.log`:
+
+```text
+extraction_succeeded          # extraction-only, not a committed article
+database_flush_succeeded      # DB accepted pending writes inside transaction
+database_commit_succeeded     # transaction committed
+article_job_completed         # final durable success
+database_commit_failed        # persistence failed; job is retried/dead-lettered
+article_job_retry_scheduled
+article_job_dead_lettered
+```
+
+The durable candidate processing stages are:
+
+```text
+discovered -> admitted -> queued -> leased -> fetching -> fetched ->
+extracting -> extracted -> validated -> persisting -> persisted -> completed
+```
+
+Terminal or exceptional stages:
+
+```text
+partial
+rejected
+retryable_failure
+permanent_failure
+```
+
+`GET /api/v1/articles` only returns committed articles.
+
+### Status, metrics, and proof of persistence
+
+Use these after starting the platform:
+
+```powershell
+Invoke-WebRequest http://127.0.0.1:8000/api/v1/status -UseBasicParsing
+Invoke-WebRequest http://127.0.0.1:8000/api/v1/metrics -UseBasicParsing
+Invoke-WebRequest "http://127.0.0.1:8000/api/v1/articles?limit=5" -UseBasicParsing
+Select-String -Path .run\logs\articles.out.log -Pattern "database_commit_succeeded"
+Select-String -Path .run\logs\articles.out.log -Pattern "article_job_completed"
+```
+
+The dashboard should show extracted article cards at:
+
+```text
+http://127.0.0.1:8000/news-sources
+```
+
+### Safe development cleanup command
+
+Dry-run stale invalid BBC-like backlog cleanup:
+
+```powershell
+.\.venv\Scripts\python.exe -m newsintel.maintenance.cleanup_old_jobs --publisher BBC --older-than-hours 48 --invalid-only
+```
+
+Apply the cleanup safely:
+
+```powershell
+.\.venv\Scripts\python.exe -m newsintel.maintenance.cleanup_old_jobs --publisher BBC --older-than-hours 48 --invalid-only --apply
+```
+
+This marks old pending invalid URL candidates as rejected and marks stale pending
+fetch jobs completed. It does not delete publishers, discovery channels, committed
+articles, article versions, events, claims, evidence, or outbox records.
 
 ### Try the synchronized acquisition workflow
 
@@ -225,6 +326,16 @@ claim candidates from exact article sentences, creates origin evidence links, wr
 initial `not_checkable` verification records when evidence is insufficient, and emits
 outbox events.
 
+In a fourth PowerShell terminal, run the local outbox relay:
+
+```powershell
+cd C:\Users\LENOVO\Documents\news
+.\.venv\Scripts\python.exe -m newsintel.workers.outbox
+```
+
+The one-command launcher starts the API, poller, article worker, and outbox relay
+together, so separate terminals are only needed for manual development.
+
 Useful read endpoints:
 
 ```text
@@ -237,6 +348,8 @@ GET /api/v1/articles
 GET /api/v1/articles/{article_id}
 GET /api/v1/articles/{article_id}/claims
 GET /api/v1/events/{event_id}
+GET /api/v1/status
+GET /api/v1/metrics
 ```
 
 If the doctor reports that PostgreSQL is unreachable, install a free local database option first:
