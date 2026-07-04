@@ -79,6 +79,7 @@ def _candidate_from_model(row: UrlCandidateModel) -> UrlCandidate:
         published_at=row.published_at,
         first_discovered_at=row.first_discovered_at,
         attempt_count=row.attempt_count,
+        url_type=row.url_type,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -186,6 +187,7 @@ class SqlAlchemyFrontierRepository(FrontierRepository):
                 next_fetch_at=candidate.next_fetch_at,
                 published_at=candidate.published_at,
                 first_discovered_at=candidate.first_discovered_at,
+                url_type=candidate.url_type,
                 attempt_count=candidate.attempt_count,
                 created_at=candidate.created_at,
                 updated_at=candidate.updated_at,
@@ -199,6 +201,7 @@ class SqlAlchemyFrontierRepository(FrontierRepository):
         candidate_id: UUID,
         published_at: datetime | None,
         discovered_at: datetime,
+        url_type: str | None = None,
     ) -> UrlCandidate | None:
         row = await self._session.get(UrlCandidateModel, candidate_id)
         if row is None:
@@ -224,6 +227,10 @@ class SqlAlchemyFrontierRepository(FrontierRepository):
             or normalized_published_at > _normalize_datetime(row.published_at)
         ):
             row.published_at = normalized_published_at
+            changed = True
+
+        if url_type and row.url_type != url_type:
+            row.url_type = url_type
             changed = True
 
         if changed:

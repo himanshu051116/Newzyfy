@@ -254,7 +254,7 @@ function Wait-ForApi {
         [int] $TimeoutSeconds = 45
     )
 
-    $healthUrl = "http://127.0.0.1:8000/api/v1/health/live"
+    $healthUrl = "http://127.0.0.1:8010/api/v1/health/live"
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 
     Write-Host "Waiting for the News Intelligence API..."
@@ -281,7 +281,7 @@ function Wait-ForApi {
 }
 
 function Show-ApiStatus {
-    $statusUrl = "http://127.0.0.1:8000/api/v1/status"
+    $statusUrl = "http://127.0.0.1:8010/api/v1/status"
 
     try {
         $response = Invoke-WebRequest `
@@ -358,7 +358,7 @@ try {
                         "--host",
                         "127.0.0.1",
                         "--port",
-                        "8000"
+                        "8010"
                     )
 
                 Start-NewsService `
@@ -386,8 +386,8 @@ try {
 
                 Write-Host ""
                 Write-Host "News Intelligence Platform started successfully."
-                Write-Host "Dashboard: http://127.0.0.1:8000/news-sources"
-                Write-Host "API documentation: http://127.0.0.1:8000/docs"
+                Write-Host "Dashboard: http://127.0.0.1:8010/news-sources"
+                Write-Host "API documentation: http://127.0.0.1:8010/docs"
                 Write-Host "Logs: $logDir"
             }
             catch {

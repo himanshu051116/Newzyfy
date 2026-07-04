@@ -31,4 +31,4 @@ def test_openapi_exposes_synchronized_acquisition_endpoints() -> None:
     assert "/api/v1/fetch/all" in schema["paths"]
     assert "/api/v1/fetch-jobs/{job_id}" in schema["paths"]
     assert "/news-sources" in schema["paths"]
-    assert "InternalServiceToken" in schema["components"]["securitySchemes"]
+    assert "HTTPBearer" in schema["components"]["securitySchemes"]

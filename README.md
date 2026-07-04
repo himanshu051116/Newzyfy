@@ -81,10 +81,12 @@ Phase 1 development has started. The repository currently contains:
 - a local `/news-sources` dashboard for adding sources, fetching one/all publishers,
   polling fetch progress, viewing source health, and visually browsing extracted
   article cards;
-- recent-news URL filtering before frontier admission: by default only article-like
-  URLs with publication timestamps from the last 48 hours are admitted, with
-  categories, tags, videos, archives, feeds, media files, and other non-article paths
-  rejected;
+- recent-news URL classification before frontier admission: by default only
+  article-like URLs with publication timestamps from the last 48 hours are admitted.
+  Navigation pages such as categories, topics, tags, search, archives, feeds, and
+  media assets are rejected, while story-bearing formats such as liveblogs,
+  explainers, investigations, fact checks, individual video reports, and photo
+  stories are admitted with an explicit `url_type`;
 - per-channel poll cap for newly admitted URLs, defaulting to 200, tunable through
   `NEWSINTEL_MAX_NEW_URLS_PER_CHANNEL_POLL`;
 - read APIs for article lists, article details, and event details;
@@ -208,6 +210,14 @@ after PostgreSQL has committed:
 5. candidate state and processing-stage metadata;
 6. transactional outbox events.
 
+URL candidates also store a durable `url_type` classification, currently including
+`standard_article`, `breaking_news`, `liveblog`, `explainer`, `analysis`, `opinion`,
+`investigation`, `fact_check`, `press_release`, `video_report`, `photo_story`, and
+navigation/rejection types such as `section_page`, `topic_page`, `tag_page`,
+`search_page`, `archive_page`, `homepage`, and `invalid_page`. The classifier has
+publisher-aware rules for The Hindu, Al Jazeera, Reuters, Indian Express, and BBC,
+and the value is included in discovery outbox payloads for auditability.
+
 Look for these logs in `.run/logs/articles.out.log`:
 
 ```text
@@ -282,11 +292,16 @@ Start PostgreSQL through Compose, run the migrations, launch the API, and open:
 http://127.0.0.1:8000/docs
 ```
 
-Click **Authorize** and enter the development token:
+Protected API routes now require an approved platform account. For a local-only
+developer checkout without an identity provider, set this explicitly in `.env.local`:
 
-```text
-dev-internal-token
+```env
+NEWSINTEL_DEV_AUTH_BYPASS_ENABLED=true
+NEWSINTEL_AUTH_SESSION_SECRET=replace-with-at-least-32-random-characters
 ```
+
+Production refuses to start when development authentication is enabled. Online
+deployments should configure OIDC/JWT settings instead.
 
 Then call these endpoints in order:
 

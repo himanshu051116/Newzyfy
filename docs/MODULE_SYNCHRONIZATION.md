@@ -100,13 +100,17 @@ If a worker crashes, its lease expires and another worker may reclaim the channe
 
 ## Current API workflow
 
-All mutation endpoints require:
+All protected endpoints require a server-validated authenticated identity. Browser
+sessions use an HttpOnly application session cookie; API clients use an
+OIDC-compatible bearer token:
 
 ```text
-X-Internal-Token: dev-internal-token
+Authorization: Bearer <signed-provider-jwt>
 ```
 
-The default token is development-only and production configuration rejects it.
+The backend loads the matching `platform_users` row and enforces approval status
+and role permissions on every protected request. Local development can explicitly
+enable `NEWSINTEL_DEV_AUTH_BYPASS_ENABLED=true`; production rejects that setting.
 
 1. `POST /api/v1/admin/publishers`
 2. `POST /api/v1/admin/discovery-channels`

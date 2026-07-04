@@ -5,6 +5,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select, text
 
+from newsintel.api.dependencies import OperationsAuth
 from newsintel.infrastructure.db.models import (
     ArticleModel,
     OutboxEventModel,
@@ -50,7 +51,39 @@ async def ready(request: Request) -> HealthResponse:
 
 
 @router.get("/status", response_model=PlatformStatusResponse)
-async def platform_status(request: Request) -> PlatformStatusResponse:
+async def platform_status(
+    request: Request,
+    _auth: OperationsAuth,
+) -> PlatformStatusResponse:
+    return await _platform_status_view(request)
+
+
+@router.get("/metrics", response_class=PlainTextResponse)
+async def metrics(
+    request: Request,
+    _auth: OperationsAuth,
+) -> str:
+    status_view = await _platform_status_view(request)
+    lines = [
+        "# HELP newsintel_articles_committed_total Stored article records.",
+        "# TYPE newsintel_articles_committed_total gauge",
+        f"newsintel_articles_committed_total {status_view.article_count}",
+        "# HELP newsintel_queue_depth URL candidates not yet terminal.",
+        "# TYPE newsintel_queue_depth gauge",
+        f"newsintel_queue_depth {status_view.queue_depth}",
+        "# HELP newsintel_outbox_pending_events Unpublished transactional outbox events.",
+        "# TYPE newsintel_outbox_pending_events gauge",
+        f"newsintel_outbox_pending_events {status_view.pending_outbox_events}",
+        "# HELP newsintel_candidate_stage_count URL candidates by processing stage.",
+        "# TYPE newsintel_candidate_stage_count gauge",
+    ]
+    for stage, count in sorted(status_view.candidate_stages.items()):
+        escaped_stage = stage.replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f'newsintel_candidate_stage_count{{stage="{escaped_stage}"}} {count}')
+    return "\n".join(lines) + "\n"
+
+
+async def _platform_status_view(request: Request) -> PlatformStatusResponse:
     database = request.app.state.database
     async with database.session_factory() as session:
         revision = await session.scalar(
@@ -128,25 +161,3 @@ async def platform_status(request: Request) -> PlatformStatusResponse:
         candidate_stages={str(stage): int(count) for stage, count in stage_rows},
         pending_outbox_events=pending_outbox_events,
     )
-
-
-@router.get("/metrics", response_class=PlainTextResponse)
-async def metrics(request: Request) -> str:
-    status_view = await platform_status(request)
-    lines = [
-        "# HELP newsintel_articles_committed_total Stored article records.",
-        "# TYPE newsintel_articles_committed_total gauge",
-        f"newsintel_articles_committed_total {status_view.article_count}",
-        "# HELP newsintel_queue_depth URL candidates not yet terminal.",
-        "# TYPE newsintel_queue_depth gauge",
-        f"newsintel_queue_depth {status_view.queue_depth}",
-        "# HELP newsintel_outbox_pending_events Unpublished transactional outbox events.",
-        "# TYPE newsintel_outbox_pending_events gauge",
-        f"newsintel_outbox_pending_events {status_view.pending_outbox_events}",
-        "# HELP newsintel_candidate_stage_count URL candidates by processing stage.",
-        "# TYPE newsintel_candidate_stage_count gauge",
-    ]
-    for stage, count in sorted(status_view.candidate_stages.items()):
-        escaped_stage = stage.replace("\\", "\\\\").replace('"', '\\"')
-        lines.append(f'newsintel_candidate_stage_count{{stage="{escaped_stage}"}} {count}')
-    return "\n".join(lines) + "\n"

@@ -2,11 +2,13 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from newsintel.api.dependencies import SourceManagerAuth
+
 router = APIRouter(tags=["dashboard"])
 
 
 @router.get("/news-sources", response_class=HTMLResponse)
-async def news_sources_dashboard() -> str:
+async def news_sources_dashboard(_auth: SourceManagerAuth) -> str:
     return """
 <!doctype html>
 <html lang="en">
@@ -63,9 +65,6 @@ async def news_sources_dashboard() -> str:
     <section class="card">
       <div class="toolbar">
         <h2>Add News Source</h2>
-        <label style="max-width: 260px">Internal token
-          <input id="token" type="password" value="dev-internal-token" />
-        </label>
       </div>
       <div class="grid">
         <label>Publisher name <input id="publisherName" placeholder="BBC News" /></label>
@@ -132,8 +131,12 @@ async def news_sources_dashboard() -> str:
     let currentJobId = null;
     let pollHandle = null;
 
-    function tokenHeaders() {
-      return { 'Content-Type': 'application/json', 'X-Internal-Token': document.getElementById('token').value };
+    function csrfToken() {
+      const match = document.cookie.split('; ').find(item => item.startsWith('newsintel_csrf='));
+      return match ? match.split('=')[1] : '';
+    }
+    function authHeaders() {
+      return { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken() };
     }
     function fmtDate(value) { return value ? new Date(value).toLocaleString() : '—'; }
     function fmtQuality(value) { return value === null || value === undefined ? '—' : Math.round(value * 100) + '%'; }
@@ -147,7 +150,7 @@ async def news_sources_dashboard() -> str:
       return `<span class="status ${cls}">${value || 'unknown'}</span>`;
     }
     async function api(path, options = {}) {
-      const res = await fetch(path, options);
+      const res = await fetch(path, { credentials: 'same-origin', ...options });
       if (!res.ok) {
         let detail = await res.text();
         try { detail = JSON.parse(detail).detail || detail; } catch {}
@@ -163,7 +166,7 @@ async def news_sources_dashboard() -> str:
       try {
         const result = await api('/api/v1/publishers/discover', {
           method: 'POST',
-          headers: tokenHeaders(),
+          headers: authHeaders(),
           body: JSON.stringify({
             publisher_name: document.getElementById('publisherName').value,
             website_url: document.getElementById('websiteUrl').value,
@@ -221,18 +224,18 @@ async def news_sources_dashboard() -> str:
       document.getElementById('addStatus').textContent = 'Edit currently pre-fills the form; delete and re-add to change stored endpoints.';
     }
     async function fetchPublisher(id) {
-      const result = await api(`/api/v1/publishers/${id}/fetch`, { method: 'POST', headers: tokenHeaders() });
+      const result = await api(`/api/v1/publishers/${id}/fetch`, { method: 'POST', headers: authHeaders() });
       watchJob(result.job_id);
       await loadSources();
     }
     async function fetchAll() {
-      const result = await api('/api/v1/fetch/all', { method: 'POST', headers: tokenHeaders() });
+      const result = await api('/api/v1/fetch/all', { method: 'POST', headers: authHeaders() });
       watchJob(result.job_id);
       await loadSources();
     }
     async function deletePublisher(id) {
       if (!confirm('Disable this publisher and its discovery channels?')) return;
-      await api(`/api/v1/publishers/${id}`, { method: 'DELETE', headers: tokenHeaders() });
+      await api(`/api/v1/publishers/${id}`, { method: 'DELETE', headers: authHeaders() });
       await loadSources();
     }
     function watchJob(jobId) {

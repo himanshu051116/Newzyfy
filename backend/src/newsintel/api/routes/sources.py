@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status
 
-from newsintel.api.dependencies import InternalAuth, SourceServiceDependency
+from newsintel.api.dependencies import SourceManagerAuth, SourceServiceDependency, ViewerAuth
 from newsintel.application.sources.dto import (
     DiscoverPublisherCommand,
     FetchJobView,
@@ -41,6 +41,7 @@ def _raise_source_error(exc: Exception) -> Never:
 
 @router.get("/publishers", response_model=list[PublisherSourceView])
 async def list_publishers(
+    _auth: ViewerAuth,
     service: SourceServiceDependency,
 ) -> list[PublisherSourceView]:
     return await service.list_publishers()
@@ -53,7 +54,7 @@ async def list_publishers(
 )
 async def discover_publisher(
     command: DiscoverPublisherCommand,
-    _auth: InternalAuth,
+    _auth: SourceManagerAuth,
     service: SourceServiceDependency,
 ) -> PublisherDiscoveryResult:
     try:
@@ -69,7 +70,7 @@ async def discover_publisher(
 )
 async def fetch_publisher(
     publisher_id: UUID,
-    _auth: InternalAuth,
+    _auth: SourceManagerAuth,
     service: SourceServiceDependency,
 ) -> FetchRequestAccepted:
     try:
@@ -85,7 +86,7 @@ async def fetch_publisher(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def fetch_all(
-    _auth: InternalAuth,
+    _auth: SourceManagerAuth,
     service: SourceServiceDependency,
 ) -> FetchRequestAccepted:
     try:
@@ -98,6 +99,7 @@ async def fetch_all(
 @router.get("/fetch-jobs/{job_id}", response_model=FetchJobView)
 async def get_fetch_job(
     job_id: UUID,
+    _auth: SourceManagerAuth,
     service: SourceServiceDependency,
 ) -> FetchJobView:
     job = await service.get_fetch_job(job_id)
@@ -112,7 +114,7 @@ async def get_fetch_job(
 @router.delete("/publishers/{publisher_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_publisher(
     publisher_id: UUID,
-    _auth: InternalAuth,
+    _auth: SourceManagerAuth,
     service: SourceServiceDependency,
 ) -> None:
     deleted = await service.delete_publisher(publisher_id)

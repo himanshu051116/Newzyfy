@@ -6,10 +6,15 @@ import structlog
 from sqlalchemy.exc import SQLAlchemyError
 
 from newsintel.adapters.artifacts.local_store import LocalRawArtifactStore
+from newsintel.adapters.artifacts.s3_store import S3RawArtifactStore
 from newsintel.adapters.extractors.article_html import extract_article_html
 from newsintel.adapters.http.safe_fetcher import SafeHttpFetcher
-from newsintel.application.articles.processing import ArticleProcessor, ArticleWorker
-from newsintel.core.config import get_settings
+from newsintel.application.articles.processing import (
+    ArticleProcessor,
+    ArticleWorker,
+    RawArtifactStore,
+)
+from newsintel.core.config import Settings, get_settings
 from newsintel.core.logging import configure_logging
 from newsintel.infrastructure.db.article_processing_repository import (
     SqlAlchemyArticleProcessingRepository,
@@ -19,6 +24,19 @@ from newsintel.infrastructure.db.session import Database
 
 def database_retry_delay(attempt: int, maximum_seconds: float) -> float:
     return min(maximum_seconds, float(2 ** min(attempt, 10)))
+
+
+def raw_artifact_store(settings: Settings) -> RawArtifactStore:
+    if settings.raw_artifact_store_backend == "s3":
+        return S3RawArtifactStore(
+            endpoint_url=settings.object_store_endpoint,
+            bucket=settings.object_store_bucket,
+            access_key=settings.object_store_access_key,
+            secret_key=settings.object_store_secret_key.get_secret_value(),
+            prefix=settings.s3_artifact_prefix,
+            server_side_encryption=settings.s3_artifact_sse,
+        )
+    return LocalRawArtifactStore(settings.raw_artifact_dir)
 
 
 async def run_worker() -> None:
@@ -36,7 +54,7 @@ async def run_worker() -> None:
         repository=repository,
         fetcher=fetcher,
         extractor=extract_article_html,
-        raw_artifact_store=LocalRawArtifactStore(settings.raw_artifact_dir),
+        raw_artifact_store=raw_artifact_store(settings),
         max_attempts=settings.article_fetch_max_attempts,
         retry_base_seconds=settings.article_fetch_retry_base_seconds,
         retry_max_seconds=settings.article_fetch_retry_max_seconds,

@@ -29,7 +29,34 @@ class Settings(BaseSettings):
     local_model_base_url: str = "http://localhost:11434"
     api_host: str = "127.0.0.1"
     api_port: int = Field(default=8000, ge=1, le=65535)
-    internal_api_token: SecretStr = SecretStr("dev-internal-token")
+    public_base_url: str = "http://127.0.0.1:8000"
+    auth_mode: Literal["disabled", "oidc", "jwt"] = "disabled"
+    auth_provider_name: str = "oidc"
+    auth_jwt_issuer: str | None = None
+    auth_jwt_audience: str | None = None
+    auth_jwt_jwks_url: str | None = None
+    auth_jwt_algorithms: str = "RS256"
+    auth_jwt_hs256_secret: SecretStr = SecretStr("")
+    auth_oidc_authorization_url: str | None = None
+    auth_oidc_token_url: str | None = None
+    auth_oidc_client_id: str | None = None
+    auth_oidc_client_secret: SecretStr = SecretStr("")
+    auth_oidc_redirect_uri: str | None = None
+    auth_session_secret: SecretStr = SecretStr("")
+    auth_session_ttl_seconds: int = Field(default=3_600, ge=300, le=86_400)
+    auth_cookie_name: str = "newsintel_session"
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    auth_csrf_cookie_name: str = "newsintel_csrf"
+    dev_auth_bypass_enabled: bool = False
+    dev_auth_provider: str = "dev-local"
+    dev_auth_user_id: str = "local-owner"
+    dev_auth_email: str = "owner.local@example.invalid"
+    dev_auth_display_name: str = "Local Owner"
+    bootstrap_owner_provider: str | None = None
+    bootstrap_owner_user_id: str | None = None
+    bootstrap_owner_email: str | None = None
+    cors_allowed_origins: str = ""
     fetch_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     fetch_max_bytes: int = Field(default=8_000_000, ge=1024, le=50_000_000)
     poll_worker_batch_size: int = Field(default=20, ge=1, le=500)
@@ -58,6 +85,9 @@ class Settings(BaseSettings):
     worker_lease_seconds: int = Field(default=120, ge=30, le=3_600)
     dead_letter_after_attempts: int = Field(default=3, ge=1, le=50)
     raw_artifact_dir: str = "artifacts/raw-html"
+    raw_artifact_store_backend: Literal["local", "s3"] = "local"
+    s3_artifact_prefix: str = "raw-html"
+    s3_artifact_sse: str | None = None
 
     @model_validator(mode="after")
     def reject_unsafe_production_defaults(self) -> "Settings":
@@ -67,14 +97,51 @@ class Settings(BaseSettings):
                     self.object_store_secret_key.get_secret_value() == "change-me"
                 ),
                 "crawler_user_agent": "example.invalid" in self.crawler_user_agent,
-                "internal_api_token": (
-                    self.internal_api_token.get_secret_value() == "dev-internal-token"
-                ),
+                "auth_mode": self.auth_mode == "disabled",
+                "auth_session_secret": len(self.auth_session_secret.get_secret_value()) < 32,
+                "dev_auth_bypass_enabled": self.dev_auth_bypass_enabled,
+                "auth_cookie_secure": not self.auth_cookie_secure,
+                "cors_allowed_origins": "*" in self.cors_origin_list,
+                "raw_artifact_store_backend": self.raw_artifact_store_backend != "s3",
+                "auth_jwt_issuer": not self.auth_jwt_issuer,
+                "auth_jwt_audience": not self.auth_jwt_audience,
             }
+            if self.auth_mode in {"oidc", "jwt"}:
+                unsafe["auth_jwt_jwks_url"] = (
+                    "HS256" not in self.auth_algorithm_list
+                    and not self.auth_jwt_jwks_url
+                )
+            if self.auth_mode == "oidc":
+                unsafe.update(
+                    {
+                        "auth_oidc_authorization_url": not self.auth_oidc_authorization_url,
+                        "auth_oidc_token_url": not self.auth_oidc_token_url,
+                        "auth_oidc_client_id": not self.auth_oidc_client_id,
+                        "auth_oidc_client_secret": (
+                            len(self.auth_oidc_client_secret.get_secret_value()) < 16
+                        ),
+                    }
+                )
             bad = [name for name, enabled in unsafe.items() if enabled]
             if bad:
                 raise ValueError(f"unsafe production defaults: {', '.join(bad)}")
         return self
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [
+            item.strip()
+            for item in self.cors_allowed_origins.split(",")
+            if item.strip()
+        ]
+
+    @property
+    def auth_algorithm_list(self) -> list[str]:
+        return [
+            item.strip()
+            for item in self.auth_jwt_algorithms.split(",")
+            if item.strip()
+        ]
 
 
 @lru_cache

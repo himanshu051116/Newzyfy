@@ -5,8 +5,8 @@ from fastapi import APIRouter, Header, HTTPException, status
 
 from newsintel.api.dependencies import (
     AcquisitionServiceDependency,
-    InternalAuth,
     PollingRepositoryDependency,
+    SourceManagerAuth,
 )
 from newsintel.application.acquisition.dto import (
     ChannelView,
@@ -46,7 +46,7 @@ def _raise_http_error(exc: Exception) -> Never:
 )
 async def create_publisher(
     command: CreatePublisherCommand,
-    _auth: InternalAuth,
+    _auth: SourceManagerAuth,
     service: AcquisitionServiceDependency,
 ) -> PublisherView:
     try:
@@ -62,7 +62,7 @@ async def create_publisher(
 )
 async def create_discovery_channel(
     command: CreateChannelCommand,
-    _auth: InternalAuth,
+    _auth: SourceManagerAuth,
     service: AcquisitionServiceDependency,
 ) -> ChannelView:
     try:
@@ -78,7 +78,7 @@ async def create_discovery_channel(
 )
 async def observe_discovery(
     command: ObserveDiscoveryCommand,
-    _auth: InternalAuth,
+    _auth: SourceManagerAuth,
     service: AcquisitionServiceDependency,
     correlation_id: Annotated[UUID | None, Header(alias="X-Correlation-ID")] = None,
     traceparent: Annotated[str | None, Header()] = None,
@@ -100,7 +100,7 @@ async def observe_discovery(
 )
 async def schedule_channel_poll(
     channel_id: UUID,
-    _auth: InternalAuth,
+    _auth: SourceManagerAuth,
     repository: PollingRepositoryDependency,
 ) -> PollScheduleResponse:
     scheduled = await repository.schedule_now(channel_id)

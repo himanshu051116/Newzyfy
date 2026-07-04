@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
-$dashboardUrl = "http://127.0.0.1:8000/news-sources"
-$healthUrl = "http://127.0.0.1:8000/api/v1/health/live"
+$dashboardUrl = "http://127.0.0.1:8010/news-sources"
+$healthUrl = "http://127.0.0.1:8010/api/v1/health/live"
 
 function Show-LauncherMessage {
     param(

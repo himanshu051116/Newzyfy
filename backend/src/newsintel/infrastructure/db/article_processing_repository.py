@@ -124,6 +124,7 @@ class SqlAlchemyArticleProcessingRepository(ArticleProcessingRepository):
                         attempt_count=row.attempt_count,
                         published_at=row.published_at,
                         first_discovered_at=row.first_discovered_at,
+                        url_type=row.url_type,
                     )
                 )
             return tuple(leased)

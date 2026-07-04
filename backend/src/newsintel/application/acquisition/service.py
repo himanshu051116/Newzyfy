@@ -3,6 +3,7 @@ from hashlib import sha256
 from uuid import UUID
 
 from newsintel.contracts.events import IntegrationEvent
+from newsintel.domain.acquisition.article_filter import classify_article_url
 from newsintel.domain.acquisition.canonicalization import (
     CanonicalizationPolicy,
     canonicalize_url,
@@ -118,6 +119,7 @@ class AcquisitionService:
     ) -> DiscoveryObservationResult:
         observed_at = command.discovered_at or datetime.now(UTC)
         canonical = canonicalize_url(str(command.url))
+        url_classification = classify_article_url(canonical.normalized)
         fingerprint = bytes.fromhex(canonical.fingerprint)
         payload_hash = (
             bytes.fromhex(command.payload_sha256) if command.payload_sha256 else None
@@ -144,6 +146,7 @@ class AcquisitionService:
                     next_fetch_at=observed_at,
                     published_at=command.published_at,
                     first_discovered_at=observed_at,
+                    url_type=url_classification.url_type.value,
                 )
                 await uow.frontier.add_candidate(candidate)
             else:
@@ -151,6 +154,7 @@ class AcquisitionService:
                     candidate_id=candidate.id,
                     published_at=command.published_at,
                     discovered_at=observed_at,
+                    url_type=url_classification.url_type.value,
                 )
                 if updated is not None:
                     candidate = updated
@@ -186,6 +190,9 @@ class AcquisitionService:
                         ),
                         "published_at_raw": command.published_at_raw,
                         "discovered_at": observed_at.isoformat(),
+                        "url_type": candidate.url_type,
+                        "url_type_confidence": url_classification.confidence,
+                        "url_type_reason": url_classification.reason,
                     },
                     producer="acquisition-api",
                     correlation_id=correlation_id,
@@ -209,6 +216,9 @@ class AcquisitionService:
                         "priority_score": candidate.priority_score,
                         "priority_components": candidate.priority_components,
                         "priority_policy_version": candidate.priority_policy_version,
+                        "url_type": candidate.url_type,
+                        "url_type_confidence": url_classification.confidence,
+                        "url_type_reason": url_classification.reason,
                         "published_at": (
                             candidate.published_at.isoformat()
                             if candidate.published_at

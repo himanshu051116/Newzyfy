@@ -78,6 +78,7 @@ class MemoryFrontier:
         candidate_id: UUID,
         published_at: datetime | None,
         discovered_at: datetime,
+        url_type: str | None = None,
     ) -> UrlCandidate | None:
         del discovered_at
         candidate = next(
@@ -92,6 +93,8 @@ class MemoryFrontier:
             return None
         if published_at is not None:
             candidate.published_at = published_at.astimezone(UTC)
+        if url_type is not None:
+            candidate.url_type = url_type
         return candidate
 
     async def add_discovery_if_absent(self, discovery: UrlDiscovery) -> bool:
@@ -167,7 +170,7 @@ async def test_discovery_is_idempotent_for_same_channel() -> None:
     )
     command = ObserveDiscoveryCommand(
         channel_id=channel.id,
-        url="https://example.com/story?id=42&utm_source=news",
+        url="https://example.com/news/company-launches-new-ai-platform?id=42&utm_source=news",
         title="Story",
     )
 
@@ -182,6 +185,10 @@ async def test_discovery_is_idempotent_for_same_channel() -> None:
     assert second.outbox_event_ids == ()
     assert len(uow.frontier.candidates) == 1
     assert len(uow.frontier.discoveries) == 1
+    candidate = next(iter(uow.frontier.candidates.values()))
+    assert candidate.url_type == "standard_article"
+    outbox_payloads = [event.payload for event in uow.outbox.events.values()]
+    assert any(payload.get("url_type") == "standard_article" for payload in outbox_payloads)
 
 
 @pytest.mark.asyncio

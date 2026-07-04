@@ -22,3 +22,18 @@ Thumbs.db
 data/
 artifacts/
 
+
+# Local secrets and runtime data
+.env
+.env.*
+!.env.example
+backups/
+.run/
+logs/
+openapi-current.json
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/

@@ -104,6 +104,7 @@ class LeasedUrlCandidate:
     attempt_count: int
     published_at: datetime | None = None
     first_discovered_at: datetime | None = None
+    url_type: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,6 +296,8 @@ class ArticleProcessor:
                 "old_job_rejected",
                 **context,
                 reason=reason,
+                classified_url_type=rejection.url_type.value,
+                url_type_confidence=rejection.confidence,
                 recent_article_window_hours=self._recent_article_window_hours,
             )
             raise ArticleJobRejectedError(message)
@@ -625,6 +628,7 @@ def _candidate_log_context(
         "attempt_number": candidate.attempt_count,
         "published_at": _isoformat(candidate.published_at),
         "first_discovered_at": _isoformat(candidate.first_discovered_at),
+        "url_type": candidate.url_type,
         "processing_started_at": started_at.isoformat(),
         "correlation_id": str(correlation_id),
     }

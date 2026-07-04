@@ -74,9 +74,11 @@ def test_html_article_links_are_extracted_from_listing_pages() -> None:
 
     links = discover_html_article_links(html, page_url="https://example.com")
 
-    assert len(links) == 1
+    assert len(links) == 2
     assert links[0].url == "https://example.com/news/2026/07/02/one-important-story-today"
     assert links[0].title == "One story"
+    assert links[1].url == "https://example.com/video/2026/07/02/story-video"
+    assert links[1].title == "Video"
 
 
 def test_listing_endpoints_are_discovered_from_homepage_navigation() -> None:

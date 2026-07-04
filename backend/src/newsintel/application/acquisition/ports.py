@@ -44,6 +44,7 @@ class FrontierRepository(Protocol):
         candidate_id: UUID,
         published_at: datetime | None,
         discovered_at: datetime,
+        url_type: str | None = None,
     ) -> UrlCandidate | None: ...
 
     async def add_discovery_if_absent(self, discovery: UrlDiscovery) -> bool: ...

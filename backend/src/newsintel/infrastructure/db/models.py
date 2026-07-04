@@ -97,6 +97,7 @@ class UrlCandidateModel(Base):
     next_fetch_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     first_discovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    url_type: Mapped[str | None] = mapped_column(String(60))
     lease_owner: Mapped[str | None] = mapped_column(String(200))
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     current_worker: Mapped[str | None] = mapped_column(String(200))
@@ -402,3 +403,96 @@ class FetchJobModel(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PlatformUserModel(Base):
+    __tablename__ = "platform_users"
+    __table_args__ = (
+        UniqueConstraint(
+            "auth_provider",
+            "auth_provider_user_id",
+            name="uq_platform_users_provider_subject",
+        ),
+        Index("ix_platform_users_access_status", "access_status", "requested_at"),
+        Index("ix_platform_users_email", "verified_email"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid7)
+    auth_provider: Mapped[str] = mapped_column(String(80))
+    auth_provider_user_id: Mapped[str] = mapped_column(String(255))
+    verified_email: Mapped[str | None] = mapped_column(String(320))
+    display_name: Mapped[str | None] = mapped_column(String(300))
+    avatar_url: Mapped[str | None] = mapped_column(Text)
+    access_status: Mapped[str] = mapped_column(String(40))
+    role: Mapped[str] = mapped_column(String(40))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by_admin_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("platform_users.id"),
+    )
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    suspension_reason: Mapped[str | None] = mapped_column(Text)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revocation_reason: Mapped[str | None] = mapped_column(Text)
+    access_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_activity_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    metadata_: Mapped[dict[str, object]] = mapped_column("metadata", JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AccessRequestModel(Base):
+    __tablename__ = "access_requests"
+    __table_args__ = (
+        Index("ix_access_requests_status_requested", "status", "requested_at"),
+        Index("ix_access_requests_user", "user_id", "requested_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid7)
+    user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("platform_users.id"),
+    )
+    status: Mapped[str] = mapped_column(String(40))
+    purpose: Mapped[str | None] = mapped_column(String(500))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    closed_by_admin_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("platform_users.id"),
+    )
+    decision_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AccessAuditLogModel(Base):
+    __tablename__ = "access_audit_log"
+    __table_args__ = (
+        Index("ix_access_audit_affected_created", "affected_user_id", "created_at"),
+        Index("ix_access_audit_actor_created", "actor_user_id", "created_at"),
+        Index("ix_access_audit_action_created", "action", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid7)
+    action: Mapped[str] = mapped_column(String(80))
+    actor_user_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("platform_users.id"),
+    )
+    affected_user_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("platform_users.id"),
+    )
+    previous_status: Mapped[str | None] = mapped_column(String(40))
+    new_status: Mapped[str | None] = mapped_column(String(40))
+    previous_role: Mapped[str | None] = mapped_column(String(40))
+    new_role: Mapped[str | None] = mapped_column(String(40))
+    reason: Mapped[str | None] = mapped_column(Text)
+    correlation_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
+    request_metadata: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

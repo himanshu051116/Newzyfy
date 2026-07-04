@@ -4,8 +4,8 @@ $workspace = Split-Path -Parent $PSScriptRoot
 $runDir = Join-Path $workspace ".run"
 $logDir = Join-Path $runDir "logs"
 $launcherLog = Join-Path $logDir "desktop-launcher.log"
-$dashboardUrl = "http://127.0.0.1:8000/news-sources"
-$healthUrl = "http://127.0.0.1:8000/api/v1/health/live"
+$dashboardUrl = "http://127.0.0.1:8010/news-sources"
+$healthUrl = "http://127.0.0.1:8010/api/v1/health/live"
 
 function Ensure-LauncherDirs {
     New-Item -ItemType Directory -Force -Path $runDir | Out-Null

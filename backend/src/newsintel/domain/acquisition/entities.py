@@ -60,6 +60,7 @@ class UrlCandidate:
     published_at: datetime | None = None
     first_discovered_at: datetime | None = None
     attempt_count: int = 0
+    url_type: str | None = None
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
